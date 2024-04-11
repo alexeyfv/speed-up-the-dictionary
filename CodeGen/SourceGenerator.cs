@@ -16,6 +16,7 @@ namespace CodeGen
             GenerateInitDictionaryBenchmark(context);
             GenerateMutateDataBenchmark(context);
             GenerateTotalBenchmark(context);
+            GenerateTotalDictionaryOnlyBenchmark(context);
         }
 
         private void GenerateEntities(GeneratorExecutionContext context)
@@ -146,7 +147,26 @@ namespace CodeGen
                     "Total",
                     string.Empty,
                     sbBenchmarks));
+        }
 
+        private void GenerateTotalDictionaryOnlyBenchmark(GeneratorExecutionContext context)
+        {
+            var sbBenchmarks = new StringBuilder();
+            var sbGlobalSetup = new StringBuilder();
+
+            for (int i = 1; i < _count + 1; i++)
+            {
+                sbBenchmarks.AppendFormat(_totalDictionaryOnlyBenchmarkTemplate, i).AppendLine();
+                sbGlobalSetup.AppendFormat("        for (var i = 0; i < Length; i++) _arrayClass{0}[i] = new(i);", i).AppendLine();
+                sbGlobalSetup.AppendFormat("        for (var i = 0; i < Length; i++) _arrayStruct{0}[i] = new(i);", i).AppendLine();
+            }
+
+            context.AddSource($"TotalDictionaryOnlyBenchmark.g.cs",
+                string.Format(
+                    _benchmarkClassTemplate,
+                    "TotalDictionaryOnly",
+                    sbGlobalSetup,
+                    sbBenchmarks));
         }
 
         public void Initialize(GeneratorInitializationContext context) { }
@@ -279,7 +299,7 @@ public partial class {0}Benchmark
 
     [Benchmark]
     [BenchmarkCategory(""{0}"")]
-    public Dictionary<int, Struct{0}> MutateStruct{0}ColllectionsMarshal()
+    public Dictionary<int, Struct{0}> MutateStruct{0}CollectionsMarshal()
     {{
         for (int i = 0; i < Length; i++)
         {{
@@ -296,26 +316,26 @@ public partial class {0}Benchmark
     [BenchmarkCategory(""{0}"")]
     public Dictionary<int, Class{0}> TotalClass{0}()
     {{
-        // Извлечение данных из БД
         var data = Enumerable
             .Range(0, Length)
-            .Select(i => new Class{0}(i))
-            .ToArray();
+            .Select(i => (i, new Class{0}(i)));
 
-        // Создание словаря
+        // Array creation
         var dict = new Dictionary<int, Class{0}>(Length);
         
-        // Заполнение словаря
-        for (int i = 0; i < data.Length; i++)
+        // Populate the data
+        foreach (var (i, obj) in data)
         {{
-            var obj = data[i];
             dict.Add(i, obj);
         }}
 
-        // Изменение данных
-        for (int i = 0; i < Length; i++)
+        // Mutate the data
+        for (var j = 0; j < Repeats; j++)
         {{
-            dict[i].DoWork(i);
+            for (int i = 0; i < Length; i++)
+            {{
+                dict[i].DoWork(i);
+            }}
         }}
 
         return dict;
@@ -328,28 +348,28 @@ public partial class {0}Benchmark
     [BenchmarkCategory(""{0}"")]
     public Dictionary<int, Struct{0}> TotalStruct{0}()
     {{
-        // Извлечение данных из БД
         var data = Enumerable
             .Range(0, Length)
-            .Select(i => new Struct{0}(i))
-            .ToArray();
+            .Select(i => (i, new Struct{0}(i)));
 
-        // Создание словаря
+        // Array creation
         var dict = new Dictionary<int, Struct{0}>(Length);
         
-        // Заполнение словаря
-        for (int i = 0; i < data.Length; i++)
+        // Populate the data
+        foreach (var (i, obj) in data)
         {{
-            var obj = data[i];
             dict.Add(i, obj);
         }}
 
-        // Изменение данных
-        for (int i = 0; i < Length; i++)
+        // Mutate the data
+        for (var j = 0; j < Repeats; j++)
         {{
-            var obj = dict[i];
-            obj.DoWork(i);
-            dict[i] = obj;
+            for (int i = 0; i < Length; i++)
+            {{
+                var obj = dict[i];
+                obj.DoWork(i);
+                dict[i] = obj;
+            }}
         }}
 
         return dict;
@@ -357,29 +377,116 @@ public partial class {0}Benchmark
 
     [Benchmark]
     [BenchmarkCategory(""{0}"")]
-    public Dictionary<int, Struct{0}> TotalStruct{0}ColllectionsMarshal()
+    public Dictionary<int, Struct{0}> TotalStruct{0}CollectionsMarshal()
     {{
-        // Извлечение данных из БД
         var data = Enumerable
             .Range(0, Length)
-            .Select(i => new Struct{0}(i))
-            .ToArray();
-
-        // Создание словаря
+            .Select(i => (i, new Struct{0}(i)));
+            
+        // Array creation
         var dict = new Dictionary<int, Struct{0}>(Length);
         
-        // Заполнение словаря
-        for (int i = 0; i < data.Length; i++)
+        // Populate the data
+        foreach (var (i, obj) in data)
         {{
-            var obj = data[i];
             dict.Add(i, obj);
         }}
 
-        // Изменение данных
-        for (int i = 0; i < Length; i++)
+        // Mutate the data        
+        for (var j = 0; j < Repeats; j++)
         {{
-            ref Struct{0} obj = ref CollectionsMarshal.GetValueRefOrNullRef(dict, i);
-            obj.DoWork(i);
+            for (int i = 0; i < Length; i++)
+            {{
+                ref Struct{0} obj = ref CollectionsMarshal.GetValueRefOrNullRef(dict, i);
+                obj.DoWork(i);
+            }}
+        }}
+
+        return dict;
+    }}";
+
+        private readonly string _totalDictionaryOnlyBenchmarkTemplate =
+@"
+    Class{0}[] _arrayClass{0} = new Class{0}[Length];
+
+    [Benchmark]
+    [BenchmarkCategory(""{0}"")]
+    public Dictionary<int, Class{0}> TotalClass{0}()
+    {{
+        // Array creation
+        var dict = new Dictionary<int, Class{0}>(Length);
+        
+        // Populate the data
+        for (var i = 0; i < Length; i++)
+        {{
+            var obj = _arrayClass{0}[i];
+            dict.Add(i, obj);
+        }}
+
+        // Mutate the data
+        for (var j = 0; j < Repeats; j++)
+        {{
+            for (int i = 0; i < Length; i++)
+            {{
+                dict[i].DoWork(i);
+            }}
+        }}
+
+        return dict;
+    }}
+
+    Struct{0}[] _arrayStruct{0} = new Struct{0}[Length];
+
+    [Benchmark]
+    [BenchmarkCategory(""{0}"")]
+    public Dictionary<int, Struct{0}> TotalStruct{0}()
+    {{
+        // Array creation
+        var dict = new Dictionary<int, Struct{0}>(Length);
+        
+        // Populate the data
+        for (var i = 0; i < Length; i++)
+        {{
+            var obj = _arrayStruct{0}[i];
+            dict.Add(i, obj);
+        }}
+
+        // Mutate the data
+        for (var j = 0; j < Repeats; j++)
+        {{
+            for (int i = 0; i < Length; i++)
+            {{
+                var obj = dict[i];
+                obj.DoWork(i);
+                dict[i] = obj;
+            }}
+        }}
+
+        return dict;
+    }}
+
+    [Benchmark]
+    [BenchmarkCategory(""{0}"")]
+    public Dictionary<int, Struct{0}> TotalStruct{0}CollectionsMarshal()
+    {{
+        // Array creation
+        var dict = new Dictionary<int, Struct{0}>(Length);
+        
+        // Populate the data
+        for (var i = 0; i < Length; i++)
+        {{
+            var obj = _arrayStruct{0}[i];
+            dict.Add(i, obj);
+        }}
+
+        // Mutate the data        
+        for (var j = 0; j < Repeats; j++)
+        {{
+            for (int i = 0; i < Length; i++)
+            {{
+                ref Struct{0} obj = ref CollectionsMarshal.GetValueRefOrNullRef(dict, i);
+                obj.DoWork(i);
+            }}
         }}
 
         return dict;
